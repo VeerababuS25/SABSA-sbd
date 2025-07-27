@@ -1,44 +1,5 @@
-# Core Streamlit and Web Framework
-streamlit>=1.28.0
-
-# Data Processing and Analysis
-pandas>=2.0.0
-numpy>=1.24.0
-
-# Visualization Libraries
-plotly>=5.15.0
-
-# Network Analysis
-networkx>=3.1
-
-# Database
-sqlite3  # Built into Python standard library
-
-# Date and Time Handling
-datetime  # Built into Python standard library
-
-# Data Classes and Type Hints
-dataclasses  # Built into Python standard library (Python 3.7+)
-typing  # Built into Python standard library
-
-# Unique ID Generation
-uuid  # Built into Python standard library
-
-# JSON Handling
-json  # Built into Python standard library
-
-# Cryptographic Functions
-hashlib  # Built into Python standard library
-
-# HTTP Requests
-requests>=2.31.0
-
-# Email Functionality
-email  # Built into Python standard library
-smtplib  # Built into Python standard library
-
-# Optional: For production deployment
-# gunicorn>=21.2.0  # For production WSGI server
-# python-dotenv>=1.0.0  # For environment variable management
-
-
+streamlit
+pandas 
+plotly 
+networkx
+numpy
