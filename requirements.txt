@@ -3,3 +3,4 @@ pandas
 plotly 
 networkx
 numpy
+xml.etree.ElementTree
