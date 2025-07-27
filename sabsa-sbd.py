@@ -373,7 +373,7 @@ def create_interactive_framework():
             
             if st.button("Move Node", key="move_node_btn"):
                 if new_x < 0 or new_x > 10 or new_y < 0 or new_y > 5:
-                    st.markdown('<div class="alert-error">Position coordinates must be within bounds (X: 0-10, Y: 0-5).</div>', unsafe_allow_html=True)
+                    st.markdown(f'<div class="alert-error">Position coordinates must be within bounds (X: 0-10, Y: 0-5).</div>', unsafe_allow_html=True)
                 else:
                     save_version()
                     if node_to_move in main_domains:
@@ -404,9 +404,9 @@ def create_interactive_framework():
             
             if st.button("Add Connection", key="add_connection"):
                 if source_node == target_node:
-                    st.markdown('<div class="alert-error">Source and target nodes cannot be the same.</div>', unsafe_allow_html=True)
+                    st.markdown(f'<div class="alert-error">Source and target nodes cannot be the same.</div>', unsafe_allow_html=True)
                 elif (source_node, target_node) in connections or (target_node, source_node) in connections:
-                    st.markdown('<div class="alert-error">Connection already exists.</div>', unsafe_allow_html=True)
+                    st.markdown(f'<div class="alert-error">Connection already exists.</div>', unsafe_allow_html=True)
                 else:
                     save_version()
                     connections.append((source_node, target_node))
@@ -486,20 +486,24 @@ def create_interactive_framework():
     main_risk_scores = [data.get("risk_score", 0) for data in main_domains.values()]
     main_compliance = [data.get("compliance", "") for data in main_domains.values()]
     
+    # Determine marker color based on show_risk_scores
+    main_marker_color = main_risk_scores if show_risk_scores else main_colors
+    main_colorscale = 'Reds' if show_risk_scores else None
+    main_showscale = show_risk_scores
+    
     fig.add_trace(go.Scatter(
         x=main_x, y=main_y,
         mode='markers+text' if show_labels else 'markers',
         marker=dict(
             size=80,
-            color=main_colors,
-            line=dict(width=2, color='#ffffff'),
-            symbol='square',
-            opacity=node_opacity,
-            colorscale='Reds' if show_risk_scores else None,
-            showscale=show_risk_scores,
+            color=main_marker_color,
+            colorscale=main_colorscale,
+            showscale=main_showscale,
             cmin=0,
             cmax=1,
-            color=main_risk_scores if show_risk_scores else main_colors
+            line=dict(width=2, color='#ffffff'),
+            symbol='square',
+            opacity=node_opacity
         ),
         text=main_names if show_labels else None,
         textposition="middle center",
@@ -520,20 +524,23 @@ def create_interactive_framework():
     sec_risk_scores = [data.get("risk_score", 0) for data in secondary_nodes.values()]
     sec_compliance = [data.get("compliance", "") for data in secondary_nodes.values()]
     
+    # Determine marker color for secondary nodes
+    sec_marker_color = sec_risk_scores if show_risk_scores else sec_colors
+    sec_colorscale = 'Reds' if show_risk_scores else None
+    
     fig.add_trace(go.Scatter(
         x=sec_x, y=sec_y,
         mode='markers+text' if show_labels else 'markers',
         marker=dict(
             size=60,
-            color=sec_colors,
-            line=dict(width=1.5, color='#ffffff'),
-            symbol='diamond',
-            opacity=node_opacity,
-            colorscale='Reds' if show_risk_scores else None,
+            color=sec_marker_color,
+            colorscale=sec_colorscale,
             showscale=False,
             cmin=0,
             cmax=1,
-            color=sec_risk_scores if show_risk_scores else sec_colors
+            line=dict(width=1.5, color='#ffffff'),
+            symbol='diamond',
+            opacity=node_opacity
         ),
         text=sec_names if show_labels else None,
         textposition="middle center",
@@ -552,20 +559,23 @@ def create_interactive_framework():
     proc_risk_scores = [data.get("risk_score", 0) for data in process_nodes.values()]
     proc_compliance = [data.get("compliance", "") for data in process_nodes.values()]
     
+    # Determine marker color for process nodes
+    proc_marker_color = proc_risk_scores if show_risk_scores else proc_colors
+    proc_colorscale = 'Reds' if show_risk_scores else None
+    
     fig.add_trace(go.Scatter(
         x=proc_x, y=proc_y,
         mode='markers+text' if show_labels else 'markers',
         marker=dict(
             size=40,
-            color=proc_colors,
-            line=dict(width=1.5, color='#4b5563'),
-            symbol='circle',
-            opacity=node_opacity,
-            colorscale='Reds' if show_risk_scores else None,
+            color=proc_marker_color,
+            colorscale=proc_colorscale,
             showscale=False,
             cmin=0,
             cmax=1,
-            color=proc_risk_scores if show_risk_scores else proc_colors
+            line=dict(width=1.5, color='#4b5563'),
+            symbol='circle',
+            opacity=node_opacity
         ),
         text=[name[:10] + '...' if len(name) > 10 else name for name in proc_names] if show_labels else None,
         textposition="middle center",
@@ -645,7 +655,7 @@ def show_detailed_view():
         with col1:
             st.markdown('<div class="metric-card">', unsafe_allow_html=True)
             st.metric("Main Domains", len(main_domains), delta_color="normal")
-            st.markdown('</div>', unsafe_allow_html=True)
+            st.markdown('</div>', unsafe_allow_html=TrueAnche)
         with col2:
             st.markdown('<div class="metric-card">', unsafe_allow_html=True)
             st.metric("Secondary Nodes", len(secondary_nodes), delta_color="normal")
