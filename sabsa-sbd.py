@@ -6,6 +6,13 @@ import numpy as np
 import json
 import uuid
 from datetime import datetime
+import logging
+import xml.etree.ElementTree as ET
+from io import StringIO
+
+# Configure logging for audit trail
+logging.basicConfig(filename='sabsa_audit.log', level=logging.INFO, 
+                    format='%(asctime)s - %(user)s - %(action)s - %(message)s')
 
 # Page configuration for enterprise-grade application
 st.set_page_config(
@@ -25,6 +32,8 @@ st.markdown("""
         --background-color: #f8fafc;
         --text-color: #1f2937;
         --border-color: #e5e7eb;
+        --success-color: #059669;
+        --error-color: #dc2626;
     }
     body {
         font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
@@ -105,6 +114,20 @@ st.markdown("""
         border-radius: 8px;
         border: 1px solid var(--border-color);
     }
+    .alert-success {
+        color: var(--success-color);
+        background-color: #ecfdf5;
+        padding: 10px;
+        border-radius: 8px;
+        margin: 8px 0;
+    }
+    .alert-error {
+        color: var(--error-color);
+        background-color: #fef2f2;
+        padding: 10px;
+        border-radius: 8px;
+        margin: 8px 0;
+    }
     @keyframes fadeIn {
         from { opacity: 0; }
         to { opacity: 1; }
@@ -120,85 +143,86 @@ st.markdown("""
         border: 1px solid var(--border-color);
         text-align: center;
     }
-    .error-message {
-        color: #dc2626;
-        font-size: 12px;
-        margin-top: 4px;
-    }
 </style>
 """, unsafe_allow_html=True)
 
-# Initialize session state for persistent data
+# Simulated user authentication and RBAC
+if 'user' not in st.session_state:
+    st.session_state.user = {"username": "guest", "role": "viewer"}  # Simulated; replace with enterprise SSO (e.g., Okta)
+if 'version_history' not in st.session_state:
+    st.session_state.version_history = []
+
+# Initialize session state for framework data
 if 'framework_data' not in st.session_state:
     st.session_state.framework_data = {
         "main_domains": {
-            "Data Security": {"x": 1, "y": 5, "color": "#1e3a8a", "description": "Protects data assets"},
-            "Identity & Access Management": {"x": 3, "y": 5, "color": "#1e3a8a", "description": "Controls access and identity"},
-            "Incident Handling & Response": {"x": 5, "y": 5, "color": "#1e3a8a", "description": "Manages security incidents"},
-            "Vulnerability Management": {"x": 7, "y": 5, "color": "#1e3a8a", "description": "Handles vulnerabilities"},
-            "Security Risk Management": {"x": 9, "y": 5, "color": "#1e3a8a", "description": "Manages security risks"}
+            "Data Security": {"x": 1, "y": 5, "color": "#1e3a8a", "description": "Protects data assets", "risk_score": 0.8, "compliance": "ISO 27001"},
+            "Identity & Access Management": {"x": 3, "y": 5, "color": "#1e3a8a", "description": "Controls access and identity", "risk_score": 0.7, "compliance": "NIST 800-53"},
+            "Incident Handling & Response": {"x": 5, "y": 5, "color": "#1e3a8a", "description": "Manages security incidents", "risk_score": 0.9, "compliance": "ISO 27001"},
+            "Vulnerability Management": {"x": 7, "y": 5, "color": "#1e3a8a", "description": "Handles vulnerabilities", "risk_score": 0.75, "compliance": "NIST 800-53"},
+            "Security Risk Management": {"x": 9, "y": 5, "color": "#1e3a8a", "description": "Manages security risks", "risk_score": 0.85, "compliance": "ISO 27001"}
         },
         "secondary_nodes": {
-            "Data Devaluation": {"x": 0.5, "y": 4, "color": "#3b82f6", "parent": "Data Security", "description": "Reduces data value exposure"},
-            "Data Integrity": {"x": 1, "y": 4, "color": "#3b82f6", "parent": "Data Security", "description": "Ensures data accuracy"},
-            "Data Confidentiality": {"x": 1.5, "y": 4, "color": "#3b82f6", "parent": "Data Security", "description": "Protects data privacy"},
-            "Security Testing": {"x": 1, "y": 3, "color": "#3b82f6", "parent": "Data Security", "description": "Validates security controls"},
-            "Authentication": {"x": 2.5, "y": 4, "color": "#3b82f6", "parent": "Identity & Access Management", "description": "Verifies user identity"},
-            "Authorization": {"x": 3, "y": 4, "color": "#3b82f6", "parent": "Identity & Access Management", "description": "Controls access permissions"},
-            "Access Recertification": {"x": 3.5, "y": 4, "color": "#3b82f6", "parent": "Identity & Access Management", "description": "Reviews access rights"},
-            "Vulnerability Identification": {"x": 3, "y": 3, "color": "#3b82f6", "parent": "Identity & Access Management", "description": "Detects access vulnerabilities"},
-            "Remediation Management": {"x": 4.5, "y": 4, "color": "#3b82f6", "parent": "Incident Handling & Response", "description": "Manages incident fixes"},
-            "Preparation": {"x": 5, "y": 4, "color": "#3b82f6", "parent": "Incident Handling & Response", "description": "Prepares for incidents"},
-            "Recovery": {"x": 5.5, "y": 4, "color": "#3b82f6", "parent": "Incident Handling & Response", "description": "Restores normal operations"},
-            "Incident Communication": {"x": 5, "y": 3, "color": "#3b82f6", "parent": "Incident Handling & Response", "description": "Communicates incident details"},
-            "Strategic Planning": {"x": 6.5, "y": 4, "color": "#3b82f6", "parent": "Vulnerability Management", "description": "Plans vulnerability strategy"},
-            "Change Management": {"x": 7, "y": 4, "color": "#3b82f6", "parent": "Vulnerability Management", "description": "Manages security changes"},
-            "Security Risk Integration": {"x": 7.5, "y": 4, "color": "#3b82f6", "parent": "Vulnerability Management", "description": "Integrates risk processes"},
-            "Governance & Reporting": {"x": 8.5, "y": 4, "color": "#3b82f6", "parent": "Security Risk Management", "description": "Manages governance"},
-            "Security Services Management": {"x": 9, "y": 4, "color": "#3b82f6", "parent": "Security Risk Management", "description": "Oversees security services"}
+            "Data Devaluation": {"x": 0.5, "y": 4, "color": "#3b82f6", "parent": "Data Security", "description": "Reduces data value exposure", "risk_score": 0.6, "compliance": "ISO 27001"},
+            "Data Integrity": {"x": 1, "y": 4, "color": "#3b82f6", "parent": "Data Security", "description": "Ensures data accuracy", "risk_score": 0.65, "compliance": "ISO 27001"},
+            "Data Confidentiality": {"x": 1.5, "y": 4, "color": "#3b82f6", "parent": "Data Security", "description": "Protects data privacy", "risk_score": 0.7, "compliance": "ISO 27001"},
+            "Security Testing": {"x": 1, "y": 3, "color": "#3b82f6", "parent": "Data Security", "description": "Validates security controls", "risk_score": 0.55, "compliance": "NIST 800-53"},
+            "Authentication": {"x": 2.5, "y": 4, "color": "#3b82f6", "parent": "Identity & Access Management", "description": "Verifies user identity", "risk_score": 0.7, "compliance": "NIST 800-53"},
+            "Authorization": {"x": 3, "y": 4, "color": "#3b82f6", "parent": "Identity & Access Management", "description": "Controls access permissions", "risk_score": 0.65, "compliance": "NIST 800-53"},
+            "Access Recertification": {"x": 3.5, "y": 4, "color": "#3b82f6", "parent": "Identity & Access Management", "description": "Reviews access rights", "risk_score": 0.6, "compliance": "NIST 800-53"},
+            "Vulnerability Identification": {"x": 3, "y": 3, "color": "#3b82f6", "parent": "Identity & Access Management", "description": "Detects access vulnerabilities", "risk_score": 0.7, "compliance": "NIST 800-53"},
+            "Remediation Management": {"x": 4.5, "y": 4, "color": "#3b82f6", "parent": "Incident Handling & Response", "description": "Manages incident fixes", "risk_score": 0.75, "compliance": "ISO 27001"},
+            "Preparation": {"x": 5, "y": 4, "color": "#3b82f6", "parent": "Incident Handling & Response", "description": "Prepares for incidents", "risk_score": 0.8, "compliance": "ISO 27001"},
+            "Recovery": {"x": 5.5, "y": 4, "color": "#3b82f6", "parent": "Incident Handling & Response", "description": "Restores normal operations", "risk_score": 0.7, "compliance": "ISO 27001"},
+            "Incident Communication": {"x": 5, "y": 3, "color": "#3b82f6", "parent": "Incident Handling & Response", "description": "Communicates incident details", "risk_score": 0.65, "compliance": "ISO 27001"},
+            "Strategic Planning": {"x": 6.5, "y": 4, "color": "#3b82f6", "parent": "Vulnerability Management", "description": "Plans vulnerability strategy", "risk_score": 0.6, "compliance": "NIST 800-53"},
+            "Change Management": {"x": 7, "y": 4, "color": "#3b82f6", "parent": "Vulnerability Management", "description": "Manages security changes", "risk_score": 0.65, "compliance": "NIST 800-53"},
+            "Security Risk Integration": {"x": 7.5, "y": 4, "color": "#3b82f6", "parent": "Vulnerability Management", "description": "Integrates risk processes", "risk_score": 0.7, "compliance": "NIST 800-53"},
+            "Governance & Reporting": {"x": 8.5, "y": 4, "color": "#3b82f6", "parent": "Security Risk Management", "description": "Manages governance", "risk_score": 0.75, "compliance": "ISO 27001"},
+            "Security Services Management": {"x": 9, "y": 4, "color": "#3b82f6", "parent": "Security Risk Management", "description": "Oversees security services", "risk_score": 0.7, "compliance": "ISO 27001"}
         },
         "process_nodes": {
-            "Encryption": {"x": 0.5, "y": 2, "color": "#60a5fa", "type": "process", "description": "Secures data with encryption"},
-            "Masking": {"x": 1, "y": 2, "color": "#60a5fa", "type": "process", "description": "Obfuscates sensitive data"},
-            "Anonymization": {"x": 1.5, "y": 2, "color": "#60a5fa", "type": "process", "description": "Removes identifiable data"},
-            "Disclosure Authorization": {"x": 2, "y": 2, "color": "#60a5fa", "type": "process", "description": "Controls data disclosure"},
-            "Validation": {"x": 2.5, "y": 2, "color": "#60a5fa", "type": "process", "description": "Validates security controls"},
-            "Digital Signing": {"x": 3, "y": 2, "color": "#60a5fa", "type": "process", "description": "Ensures data authenticity"},
-            "Multi-factor Authentication": {"x": 3.5, "y": 2, "color": "#60a5fa", "type": "process", "description": "Enhances authentication"},
-            "Vulnerability Analysis": {"x": 4, "y": 2, "color": "#60a5fa", "type": "process", "description": "Analyzes vulnerabilities"},
-            "Estimation of Extend": {"x": 4.5, "y": 2, "color": "#60a5fa", "type": "process", "description": "Estimates vulnerability impact"},
-            "Recovery Analysis": {"x": 5, "y": 2, "color": "#60a5fa", "type": "process", "description": "Plans recovery strategies"},
-            "Classification of Vulnerabilities": {"x": 5.5, "y": 2, "color": "#60a5fa", "type": "process", "description": "Categorizes vulnerabilities"},
-            "Events History Repository": {"x": 6, "y": 2, "color": "#60a5fa", "type": "process", "description": "Stores event history"},
-            "Wargaming": {"x": 6.5, "y": 2, "color": "#60a5fa", "type": "process", "description": "Simulates attack scenarios"},
-            "Maturity Frameworks": {"x": 7, "y": 2, "color": "#60a5fa", "type": "process", "description": "Assesses maturity levels"},
-            "Incident Response Planning": {"x": 7.5, "y": 2, "color": "#60a5fa", "type": "process", "description": "Plans incident response"},
-            "Risk Appetite": {"x": 8, "y": 2, "color": "#60a5fa", "type": "process", "description": "Defines risk tolerance"},
-            "Secure Repository": {"x": 0.5, "y": 1, "color": "#60a5fa", "type": "process", "description": "Secures data storage"},
-            "Inventory of Basic Accounts": {"x": 1, "y": 1, "color": "#60a5fa", "type": "process", "description": "Tracks account inventory"},
-            "Control of Privileged Access": {"x": 1.5, "y": 1, "color": "#60a5fa", "type": "process", "description": "Manages privileged access"},
-            "Sandbox": {"x": 2, "y": 1, "color": "#60a5fa", "type": "process", "description": "Isolates testing environment"},
-            "Training": {"x": 2.5, "y": 1, "color": "#60a5fa", "type": "process", "description": "Educates staff"},
-            "Role/Rule Management": {"x": 3, "y": 1, "color": "#60a5fa", "type": "process", "description": "Manages access roles"},
-            "Single Sign On": {"x": 3.5, "y": 1, "color": "#60a5fa", "type": "process", "description": "Simplifies authentication"},
-            "Remote Access Authentication": {"x": 4, "y": 1, "color": "#60a5fa", "type": "process", "description": "Secures remote access"},
-            "Monitoring and Qualification": {"x": 4.5, "y": 1, "color": "#60a5fa", "type": "process", "description": "Monitors security metrics"},
-            "Business Alignment": {"x": 5, "y": 1, "color": "#60a5fa", "type": "process", "description": "Aligns with business goals"},
-            "Incident Escalation": {"x": 5.5, "y": 1, "color": "#60a5fa", "type": "process", "description": "Manages incident escalation"},
-            "Change Management": {"x": 6, "y": 1, "color": "#60a5fa", "type": "process", "description": "Controls change processes"},
-            "Metrics, KPIs, KRIs and MI": {"x": 6.5, "y": 1, "color": "#60a5fa", "type": "process", "description": "Tracks performance metrics"},
-            "Secure Transition": {"x": 7, "y": 1, "color": "#60a5fa", "type": "process", "description": "Ensures secure transitions"},
-            "Strategy": {"x": 7.5, "y": 1, "color": "#60a5fa", "type": "process", "description": "Defines security strategy"},
-            "Security Testing Framework": {"x": 0.5, "y": 0, "color": "#60a5fa", "type": "process", "description": "Structures security tests"},
-            "Penetration Testing": {"x": 1, "y": 0, "color": "#60a5fa", "type": "process", "description": "Simulates attacks"},
-            "Attestation": {"x": 1.5, "y": 0, "color": "#60a5fa", "type": "process", "description": "Certifies compliance"},
-            "Automated Testing": {"x": 2, "y": 0, "color": "#60a5fa", "type": "process", "description": "Automates security tests"},
-            "Recertification": {"x": 2.5, "y": 0, "color": "#60a5fa", "type": "process", "description": "Renews certifications"},
-            "Authenticated Scanning": {"x": 3, "y": 0, "color": "#60a5fa", "type": "process", "description": "Scans with authentication"},
-            "Red Team Testing": {"x": 3.5, "y": 0, "color": "#60a5fa", "type": "process", "description": "Simulates advanced attacks"},
-            "Service Catalogue": {"x": 4, "y": 0, "color": "#60a5fa", "type": "process", "description": "Lists security services"},
-            "Change Reconciliation": {"x": 4.5, "y": 0, "color": "#60a5fa", "type": "process", "description": "Reconciles changes"},
-            "Case Management": {"x": 5, "y": 0, "color": "#60a5fa", "type": "process", "description": "Manages security cases"}
+            "Encryption": {"x": 0.5, "y": 2, "color": "#60a5fa", "type": "process", "description": "Secures data with encryption", "risk_score": 0.5, "compliance": "ISO 27001"},
+            "Masking": {"x": 1, "y": 2, "color": "#60a5fa", "type": "process", "description": "Obfuscates sensitive data", "risk_score": 0.5, "compliance": "ISO 27001"},
+            "Anonymization": {"x": 1.5, "y": 2, "color": "#60a5fa", "type": "process", "description": "Removes identifiable data", "risk_score": 0.5, "compliance": "ISO 27001"},
+            "Disclosure Authorization": {"x": 2, "y": 2, "color": "#60a5fa", "type": "process", "description": "Controls data disclosure", "risk_score": 0.55, "compliance": "ISO 27001"},
+            "Validation": {"x": 2.5, "y": 2, "color": "#60a5fa", "type": "process", "description": "Validates security controls", "risk_score": 0.6, "compliance": "NIST 800-53"},
+            "Digital Signing": {"x": 3, "y": 2, "color": "#60a5fa", "type": "process", "description": "Ensures data authenticity", "risk_score": 0.55, "compliance": "NIST 800-53"},
+            "Multi-factor Authentication": {"x": 3.5, "y": 2, "color": "#60a5fa", "type": "process", "description": "Enhances authentication", "risk_score": 0.65, "compliance": "NIST 800-53"},
+            "Vulnerability Analysis": {"x": 4, "y": 2, "color": "#60a5fa", "type": "process", "description": "Analyzes vulnerabilities", "risk_score": 0.7, "compliance": "NIST 800-53"},
+            "Estimation of Extend": {"x": 4.5, "y": 2, "color": "#60a5fa", "type": "process", "description": "Estimates vulnerability impact", "risk_score": 0.65, "compliance": "NIST 800-53"},
+            "Recovery Analysis": {"x": 5, "y": 2, "color": "#60a5fa", "type": "process", "description": "Plans recovery strategies", "risk_score": 0.7, "compliance": "ISO 27001"},
+            "Classification of Vulnerabilities": {"x": 5.5, "y": 2, "color": "#60a5fa", "type": "process", "description": "Categorizes vulnerabilities", "risk_score": 0.65, "compliance": "NIST 800-53"},
+            "Events History Repository": {"x": 6, "y": 2, "color": "#60a5fa", "type": "process", "description": "Stores event history", "risk_score": 0.6, "compliance": "ISO 27001"},
+            "Wargaming": {"x": 6.5, "y": 2, "color": "#60a5fa", "type": "process", "description": "Simulates attack scenarios", "risk_score": 0.65, "compliance": "NIST 800-53"},
+            "Maturity Frameworks": {"x": 7, "y": 2, "color": "#60a5fa", "type": "process", "description": "Assesses maturity levels", "risk_score": 0.6, "compliance": "ISO 27001"},
+            "Incident Response Planning": {"x": 7.5, "y": 2, "color": "#60a5fa", "type": "process", "description": "Plans incident response", "risk_score": 0.7, "compliance": "ISO 27001"},
+            "Risk Appetite": {"x": 8, "y": 2, "color": "#60a5fa", "type": "process", "description": "Defines risk tolerance", "risk_score": 0.65, "compliance": "ISO 27001"},
+            "Secure Repository": {"x": 0.5, "y": 1, "color": "#60a5fa", "type": "process", "description": "Secures data storage", "risk_score": 0.55, "compliance": "ISO 27001"},
+            "Inventory of Basic Accounts": {"x": 1, "y": 1, "color": "#60a5fa", "type": "process", "description": "Tracks account inventory", "risk_score": 0.6, "compliance": "NIST 800-53"},
+            "Control of Privileged Access": {"x": 1.5, "y": 1, "color": "#60a5fa", "type": "process", "description": "Manages privileged access", "risk_score": 0.7, "compliance": "NIST 800-53"},
+            "Sandbox": {"x": 2, "y": 1, "color": "#60a5fa", "type": "process", "description": "Isolates testing environment", "risk_score": 0.55, "compliance": "NIST 800-53"},
+            "Training": {"x": 2.5, "y": 1, "color": "#60a5fa", "type": "process", "description": "Educates staff", "risk_score": 0.5, "compliance": "ISO 27001"},
+            "Role/Rule Management": {"x": 3, "y": 1, "color": "#60a5fa", "type": "process", "description": "Manages access roles", "risk_score": 0.65, "compliance": "NIST 800-53"},
+            "Single Sign On": {"x": 3.5, "y": 1, "color": "#60a5fa", "type": "process", "description": "Simplifies authentication", "risk_score": 0.6, "compliance": "NIST 800-53"},
+            "Remote Access Authentication": {"x": 4, "y": 1, "color": "#60a5fa", "type": "process", "description": "Secures remote access", "risk_score": 0.65, "compliance": "NIST 800-53"},
+            "Monitoring and Qualification": {"x": 4.5, "y": 1, "color": "#60a5fa", "type": "process", "description": "Monitors security metrics", "risk_score": 0.6, "compliance": "ISO 27001"},
+            "Business Alignment": {"x": 5, "y": 1, "color": "#60a5fa", "type": "process", "description": "Aligns with business goals", "risk_score": 0.65, "compliance": "ISO 27001"},
+            "Incident Escalation": {"x": 5.5, "y": 1, "color": "#60a5fa", "type": "process", "description": "Manages incident escalation", "risk_score": 0.7, "compliance": "ISO 27001"},
+            "Change Management": {"x": 6, "y": 1, "color": "#60a5fa", "type": "process", "description": "Controls change processes", "risk_score": 0.65, "compliance": "NIST 800-53"},
+            "Metrics, KPIs, KRIs and MI": {"x": 6.5, "y": 1, "color": "#60a5fa", "type": "process", "description": "Tracks performance metrics", "risk_score": 0.6, "compliance": "ISO 27001"},
+            "Secure Transition": {"x": 7, "y": 1, "color": "#60a5fa", "type": "process", "description": "Ensures secure transitions", "risk_score": 0.65, "compliance": "ISO 27001"},
+            "Strategy": {"x": 7.5, "y": 1, "color": "#60a5fa", "type": "process", "description": "Defines security strategy", "risk_score": 0.7, "compliance": "ISO 27001"},
+            "Security Testing Framework": {"x": 0.5, "y": 0, "color": "#60a5fa", "type": "process", "description": "Structures security tests", "risk_score": 0.6, "compliance": "NIST 800-53"},
+            "Penetration Testing": {"x": 1, "y": 0, "color": "#60a5fa", "type": "process", "description": "Simulates attacks", "risk_score": 0.65, "compliance": "NIST 800-53"},
+            "Attestation": {"x": 1.5, "y": 0, "color": "#60a5fa", "type": "process", "description": "Certifies compliance", "risk_score": 0.6, "compliance": "ISO 27001"},
+            "Automated Testing": {"x": 2, "y": 0, "color": "#60a5fa", "type": "process", "description": "Automates security tests", "risk_score": 0.6, "compliance": "NIST 800-53"},
+            "Recertification": {"x": 2.5, "y": 0, "color": "#60a5fa", "type": "process", "description": "Renews certifications", "risk_score": 0.6, "compliance": "NIST 800-53"},
+            "Authenticated Scanning": {"x": 3, "y": 0, "color": "#60a5fa", "type": "process", "description": "Scans with authentication", "risk_score": 0.65, "compliance": "NIST 800-53"},
+            "Red Team Testing": {"x": 3.5, "y": 0, "color": "#60a5fa", "type": "process", "description": "Simulates advanced attacks", "risk_score": 0.7, "compliance": "NIST 800-53"},
+            "Service Catalogue": {"x": 4, "y": 0, "color": "#60a5fa", "type": "process", "description": "Lists security services", "risk_score": 0.55, "compliance": "ISO 27001"},
+            "Change Reconciliation": {"x": 4.5, "y": 0, "color": "#60a5fa", "type": "process", "description": "Reconciles changes", "risk_score": 0.6, "compliance": "NIST 800-53"},
+            "Case Management": {"x": 5, "y": 0, "color": "#60a5fa", "type": "process", "description": "Manages security cases", "risk_score": 0.65, "compliance": "ISO 27001"}
         },
         "connections": [
             ("Data Security", "Data Devaluation"),
@@ -234,14 +258,19 @@ if 'framework_data' not in st.session_state:
 def get_framework_data():
     return st.session_state.framework_data
 
-def validate_node_input(node_name, node_x, node_y, parent_node, node_type):
-    """Validate node input before adding."""
+def log_action(action, message):
+    """Log user actions for audit trail."""
+    logging.info(f"user={st.session_state.user['username']}, action={action}, message={message}")
+
+def validate_node_input(node_name, node_x, node_y, parent_node, node_type, existing_node=False):
+    """Validate node input before adding or updating."""
     errors = []
+    existing_nodes = {**st.session_state.framework_data["main_domains"], 
+                     **st.session_state.framework_data["secondary_nodes"], 
+                     **st.session_state.framework_data["process_nodes"]}
     if not node_name or len(node_name.strip()) == 0:
         errors.append("Node name cannot be empty.")
-    if node_name in {**st.session_state.framework_data["main_domains"], 
-                     **st.session_state.framework_data["secondary_nodes"], 
-                     **st.session_state.framework_data["process_nodes"]}:
+    if not existing_node and node_name in existing_nodes:
         errors.append("Node name must be unique.")
     if node_x < 0 or node_x > 10 or node_y < 0 or node_y > 5:
         errors.append("Position coordinates must be within bounds (X: 0-10, Y: 0-5).")
@@ -249,8 +278,24 @@ def validate_node_input(node_name, node_x, node_y, parent_node, node_type):
         errors.append("Secondary nodes must have a parent domain.")
     return errors
 
+def save_version():
+    """Save current framework state to version history."""
+    version_id = str(uuid.uuid4())[:8]
+    version_data = {
+        "version_id": version_id,
+        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "data": st.session_state.framework_data.copy(),
+        "user": st.session_state.user["username"]
+    }
+    st.session_state.version_history.append(version_data)
+    log_action("save_version", f"Saved version {version_id}")
+
 def create_interactive_framework():
     st.markdown('<h1 class="main-header">🔒 Enterprise SABSA Security Architecture Framework</h1>', unsafe_allow_html=True)
+    
+    # Simulated RBAC check
+    user_role = st.session_state.user["role"]
+    is_admin = user_role in ["admin", "architect"]
     
     # Load data
     data = get_framework_data()
@@ -261,46 +306,50 @@ def create_interactive_framework():
     
     # Professional control panel
     st.sidebar.title("Framework Controls")
-    view_mode = st.sidebar.radio("Mode", ["View", "Management"], key="view_mode")
+    view_mode = st.sidebar.radio("Mode", ["View", "Management"] if is_admin else ["View"], key="view_mode")
     show_connections = st.sidebar.checkbox("Show Connections", value=True)
     show_labels = st.sidebar.checkbox("Show Labels", value=True)
     highlight_domain = st.sidebar.selectbox("Highlight Domain", ["None"] + list(main_domains.keys()))
     node_opacity = st.sidebar.slider("Node Opacity", 0.5, 1.0, 0.8, 0.05)
+    show_risk_scores = st.sidebar.checkbox("Show Risk Scores", value=False)
     
-    # Management mode
-    if view_mode == "Management":
-        with st.sidebar.expander("Manage Nodes", expanded=True):
-            st.subheader("Add New Node")
+    # Management mode (admin/architect only)
+    if view_mode == "Management" and is_admin:
+        with st.sidebar.expander("Add New Node", expanded=False):
+            st.subheader("Create Node")
             node_type = st.selectbox("Node Type", ["Main Domain", "Secondary Node", "Process Node"], key="node_type")
             node_name = st.text_input("Node Name", key="node_name")
-            node_description = st.text_area("Description (Optional)", height=100)
+            node_description = st.text_area("Description (Optional)", height=100, key="node_desc")
+            node_risk_score = st.number_input("Risk Score (0-1)", min_value=0.0, max_value=1.0, value=0.5, step=0.05, key="node_risk")
+            node_compliance = st.selectbox("Compliance Standard", ["ISO 27001", "NIST 800-53", "GDPR", "Other"], key="node_compliance")
             node_x = st.number_input("X Position", min_value=0.0, max_value=10.0, value=1.0, step=0.1, key="node_x")
             node_y = st.number_input("Y Position", min_value=0.0, max_value=5.0, value=1.0, step=0.1, key="node_y")
-            parent_node = st.selectbox("Parent Domain (for Secondary)", ["None"] + list(main_domains.keys())) if node_type == "Secondary Node" else None
+            parent_node = st.selectbox("Parent Domain (for Secondary)", ["None"] + list(main_domains.keys()), key="node_parent") if node_type == "Secondary Node" else None
             connect_to = st.multiselect("Connect to Nodes", 
-                                      list(main_domains.keys()) + list(secondary_nodes.keys()) + list(process_nodes.keys()))
+                                      list(main_domains.keys()) + list(secondary_nodes.keys()) + list(process_nodes.keys()), key="node_connect")
             
             if st.button("Add Node", key="add_node"):
                 errors = validate_node_input(node_name, node_x, node_y, parent_node, node_type)
                 if errors:
                     for error in errors:
-                        st.markdown(f'<p class="error-message">{error}</p>', unsafe_allow_html=True)
+                        st.markdown(f'<div class="alert-error">{error}</div>', unsafe_allow_html=True)
                 else:
+                    save_version()
                     node_id = str(uuid.uuid4())[:8]
                     color = "#1e3a8a" if node_type == "Main Domain" else "#3b82f6" if node_type == "Secondary Node" else "#60a5fa"
                     
                     if node_type == "Main Domain":
-                        main_domains[node_name] = {"x": node_x, "y": node_y, "color": color, "description": node_description}
+                        main_domains[node_name] = {"x": node_x, "y": node_y, "color": color, "description": node_description, 
+                                                  "risk_score": node_risk_score, "compliance": node_compliance}
                     elif node_type == "Secondary Node":
                         secondary_nodes[node_name] = {
-                            "x": node_x, "y": node_y, "color": color, 
-                            "parent": parent_node if parent_node != "None" else "", 
-                            "description": node_description
+                            "x": node_x, "y": node_y, "color": color, "parent": parent_node, 
+                            "description": node_description, "risk_score": node_risk_score, "compliance": node_compliance
                         }
                     else:
                         process_nodes[node_name] = {
-                            "x": node_x, "y": node_y, "color": color, 
-                            "type": "process", "description": node_description
+                            "x": node_x, "y": node_y, "color": color, "type": "process", 
+                            "description": node_description, "risk_score": node_risk_score, "compliance": node_compliance
                         }
                     
                     for target in connect_to:
@@ -312,13 +361,76 @@ def create_interactive_framework():
                         "process_nodes": process_nodes,
                         "connections": connections
                     }
-                    st.success(f"Node '{node_name}' added successfully")
+                    st.markdown(f'<div class="alert-success">Node "{node_name}" added successfully</div>', unsafe_allow_html=True)
+                    log_action("add_node", f"Added node: {node_name}")
+        
+        with st.sidebar.expander("Move Node", expanded=False):
+            st.subheader("Reposition Node")
+            node_to_move = st.selectbox("Select Node", 
+                                      list(main_domains.keys()) + list(secondary_nodes.keys()) + list(process_nodes.keys()), key="move_node")
+            new_x = st.number_input("New X Position", min_value=0.0, max_value=10.0, value=1.0, step=0.1, key="move_x")
+            new_y = st.number_input("New Y Position", min_value=0.0, max_value=5.0, value=1.0, step=0.1, key="move_y")
+            
+            if st.button("Move Node", key="move_node_btn"):
+                if new_x < 0 or new_x > 10 or new_y < 0 or new_y > 5:
+                    st.markdown('<div class="alert-error">Position coordinates must be within bounds (X: 0-10, Y: 0-5).</div>', unsafe_allow_html=True)
+                else:
+                    save_version()
+                    if node_to_move in main_domains:
+                        main_domains[node_to_move]["x"] = new_x
+                        main_domains[node_to_move]["y"] = new_y
+                    elif node_to_move in secondary_nodes:
+                        secondary_nodes[node_to_move]["x"] = new_x
+                        secondary_nodes[node_to_move]["y"] = new_y
+                    elif node_to_move in process_nodes:
+                        process_nodes[node_to_move]["x"] = new_x
+                        process_nodes[node_to_move]["y"] = new_y
+                    
+                    st.session_state.framework_data = {
+                        "main_domains": main_domains,
+                        "secondary_nodes": secondary_nodes,
+                        "process_nodes": process_nodes,
+                        "connections": connections
+                    }
+                    st.markdown(f'<div class="alert-success">Node "{node_to_move}" moved to ({new_x}, {new_y})</div>', unsafe_allow_html=True)
+                    log_action("move_node", f"Moved node {node_to_move} to ({new_x}, {new_y})")
+        
+        with st.sidebar.expander("Manage Connections", expanded=False):
+            st.subheader("Add/Remove Connections")
+            source_node = st.selectbox("Source Node", 
+                                     list(main_domains.keys()) + list(secondary_nodes.keys()) + list(process_nodes.keys()), key="source_node")
+            target_node = st.selectbox("Target Node", 
+                                     list(main_domains.keys()) + list(secondary_nodes.keys()) + list(process_nodes.keys()), key="target_node")
+            
+            if st.button("Add Connection", key="add_connection"):
+                if source_node == target_node:
+                    st.markdown('<div class="alert-error">Source and target nodes cannot be the same.</div>', unsafe_allow_html=True)
+                elif (source_node, target_node) in connections or (target_node, source_node) in connections:
+                    st.markdown('<div class="alert-error">Connection already exists.</div>', unsafe_allow_html=True)
+                else:
+                    save_version()
+                    connections.append((source_node, target_node))
+                    st.session_state.framework_data["connections"] = connections
+                    st.markdown(f'<div class="alert-success">Connection added: {source_node} → {target_node}</div>', unsafe_allow_html=True)
+                    log_action("add_connection", f"Added connection: {source_node} → {target_node}")
+            
+            connection_to_remove = st.selectbox("Select Connection to Remove", 
+                                              [f"{s} → {t}" for s, t in connections], key="remove_connection")
+            if st.button("Remove Connection", key="remove_connection_btn"):
+                if connection_to_remove:
+                    save_version()
+                    s, t = connection_to_remove.split(" → ")
+                    connections.remove((s, t))
+                    st.session_state.framework_data["connections"] = connections
+                    st.markdown(f'<div class="alert-success">Connection removed: {s} → {t}</div>', unsafe_allow_html=True)
+                    log_action("remove_connection", f"Removed connection: {s} → {t}")
         
         with st.sidebar.expander("Delete Node", expanded=False):
-            st.subheader("Remove Existing Node")
+            st.subheader("Remove Node")
             node_to_delete = st.selectbox("Select Node to Delete", 
-                                        list(main_domains.keys()) + list(secondary_nodes.keys()) + list(process_nodes.keys()))
-            if st.button("Delete Node", key="delete_node"):
+                                        list(main_domains.keys()) + list(secondary_nodes.keys()) + list(process_nodes.keys()), key="delete_node")
+            if st.button("Delete Node", key="delete_node_btn"):
+                save_version()
                 if node_to_delete in main_domains:
                     del main_domains[node_to_delete]
                     secondary_nodes_to_remove = [k for k, v in secondary_nodes.items() if v["parent"] == node_to_delete]
@@ -337,7 +449,8 @@ def create_interactive_framework():
                     "process_nodes": process_nodes,
                     "connections": connections
                 }
-                st.success(f"Node '{node_to_delete}' deleted successfully")
+                st.markdown(f'<div class="alert-success">Node "{node_to_delete}" deleted successfully</div>', unsafe_allow_html=True)
+                log_action("delete_node", f"Deleted node: {node_to_delete}")
     
     # Create professional-grade visualization
     fig = go.Figure()
@@ -370,6 +483,8 @@ def create_interactive_framework():
     main_names = list(main_domains.keys())
     main_colors = ['#dc2626' if name == highlight_domain else data["color"] for name, data in main_domains.items()]
     main_descriptions = [data.get("description", "") for data in main_domains.values()]
+    main_risk_scores = [data.get("risk_score", 0) for data in main_domains.values()]
+    main_compliance = [data.get("compliance", "") for data in main_domains.values()]
     
     fig.add_trace(go.Scatter(
         x=main_x, y=main_y,
@@ -379,14 +494,19 @@ def create_interactive_framework():
             color=main_colors,
             line=dict(width=2, color='#ffffff'),
             symbol='square',
-            opacity=node_opacity
+            opacity=node_opacity,
+            colorscale='Reds' if show_risk_scores else None,
+            showscale=show_risk_scores,
+            cmin=0,
+            cmax=1,
+            color=main_risk_scores if show_risk_scores else main_colors
         ),
         text=main_names if show_labels else None,
         textposition="middle center",
         textfont=dict(size=12, color='#ffffff', family="Inter"),
         name="Main Domains",
-        hovertemplate='<b>%{text}</b><br>Type: Main Domain<br>Description: %{customdata}<extra></extra>',
-        customdata=main_descriptions
+        hovertemplate='<b>%{text}</b><br>Type: Main Domain<br>Description: %{customdata[0]}<br>Risk Score: %{customdata[1]:.2f}<br>Compliance: %{customdata[2]}<extra></extra>',
+        customdata=list(zip(main_descriptions, main_risk_scores, main_compliance))
     ))
     
     # Add secondary nodes
@@ -397,6 +517,8 @@ def create_interactive_framework():
                  else data["color"] for name, data in secondary_nodes.items()]
     sec_parents = [data["parent"] for data in secondary_nodes.values()]
     sec_descriptions = [data.get("description", "") for data in secondary_nodes.values()]
+    sec_risk_scores = [data.get("risk_score", 0) for data in secondary_nodes.values()]
+    sec_compliance = [data.get("compliance", "") for data in secondary_nodes.values()]
     
     fig.add_trace(go.Scatter(
         x=sec_x, y=sec_y,
@@ -406,14 +528,19 @@ def create_interactive_framework():
             color=sec_colors,
             line=dict(width=1.5, color='#ffffff'),
             symbol='diamond',
-            opacity=node_opacity
+            opacity=node_opacity,
+            colorscale='Reds' if show_risk_scores else None,
+            showscale=False,
+            cmin=0,
+            cmax=1,
+            color=sec_risk_scores if show_risk_scores else sec_colors
         ),
         text=sec_names if show_labels else None,
         textposition="middle center",
         textfont=dict(size=10, family="Inter"),
         name="Secondary Nodes",
-        hovertemplate='<b>%{text}</b><br>Type: Secondary<br>Parent: %{customdata[0]}<br>Description: %{customdata[1]}<extra></extra>',
-        customdata=list(zip(sec_parents, sec_descriptions))
+        hovertemplate='<b>%{text}</b><br>Type: Secondary<br>Parent: %{customdata[0]}<br>Description: %{customdata[1]}<br>Risk Score: %{customdata[2]:.2f}<br>Compliance: %{customdata[3]}<extra></extra>',
+        customdata=list(zip(sec_parents, sec_descriptions, sec_risk_scores, sec_compliance))
     ))
     
     # Add process nodes
@@ -422,6 +549,8 @@ def create_interactive_framework():
     proc_names = list(process_nodes.keys())
     proc_colors = [data["color"] for data in process_nodes.values()]
     proc_descriptions = [data.get("description", "") for data in process_nodes.values()]
+    proc_risk_scores = [data.get("risk_score", 0) for data in process_nodes.values()]
+    proc_compliance = [data.get("compliance", "") for data in process_nodes.values()]
     
     fig.add_trace(go.Scatter(
         x=proc_x, y=proc_y,
@@ -431,14 +560,19 @@ def create_interactive_framework():
             color=proc_colors,
             line=dict(width=1.5, color='#4b5563'),
             symbol='circle',
-            opacity=node_opacity
+            opacity=node_opacity,
+            colorscale='Reds' if show_risk_scores else None,
+            showscale=False,
+            cmin=0,
+            cmax=1,
+            color=proc_risk_scores if show_risk_scores else proc_colors
         ),
         text=[name[:10] + '...' if len(name) > 10 else name for name in proc_names] if show_labels else None,
         textposition="middle center",
         textfont=dict(size=8, family="Inter"),
         name="Process Nodes",
-        hovertemplate='<b>%{text}</b><br>Type: Process<br>Description: %{customdata}<extra></extra>',
-        customdata=proc_descriptions
+        hovertemplate='<b>%{text}</b><br>Type: Process<br>Description: %{customdata[0]}<br>Risk Score: %{customdata[1]:.2f}<br>Compliance: %{customdata[2]}<extra></extra>',
+        customdata=list(zip(proc_descriptions, proc_risk_scores, proc_compliance))
     ))
     
     # Professional layout
@@ -465,7 +599,7 @@ def create_interactive_framework():
         ),
         plot_bgcolor='rgba(243,244,246,0.9)',
         paper_bgcolor='#ffffff',
-        height=850,
+        height=900,
         showlegend=True,
         legend=dict(
             x=0.01,
@@ -496,17 +630,18 @@ def show_detailed_view():
     
     main_domains, secondary_nodes, process_nodes, connections = create_interactive_framework()
     
-    tab1, tab2, tab3, tab4 = st.tabs([
+    tab1, tab2, tab3, tab4, tab5 = st.tabs([
         "📊 Domain Analysis",
         "🔗 Connection Matrix",
         "📋 Implementation Guide",
-        "💾 Export Options"
+        "💾 Export Options",
+        "📈 Risk Analytics"
     ])
     
     with tab1:
         st.subheader("Domain Analysis")
         
-        col1, col2, col3 = st.columns(3)
+        col1, col2, col3, col4 = st.columns(4)
         with col1:
             st.markdown('<div class="metric-card">', unsafe_allow_html=True)
             st.metric("Main Domains", len(main_domains), delta_color="normal")
@@ -519,6 +654,10 @@ def show_detailed_view():
             st.markdown('<div class="metric-card">', unsafe_allow_html=True)
             st.metric("Process Nodes", len(process_nodes), delta_color="normal")
             st.markdown('</div>', unsafe_allow_html=True)
+        with col4:
+            st.markdown('<div class="metric-card">', unsafe_allow_html=True)
+            st.metric("Connections", len(connections), delta_color="normal")
+            st.markdown('</div>', unsafe_allow_html=True)
         
         domain_data = []
         for domain, data in main_domains.items():
@@ -528,7 +667,9 @@ def show_detailed_view():
                 "Type": "Main",
                 "Secondary Nodes": secondary_count,
                 "Connections": len([c for c in connections if domain in c]),
-                "Description": data.get("description", "")
+                "Description": data.get("description", ""),
+                "Risk Score": data.get("risk_score", 0),
+                "Compliance": data.get("compliance", "")
             })
         
         for node, data in secondary_nodes.items():
@@ -537,7 +678,9 @@ def show_detailed_view():
                 "Type": "Secondary",
                 "Secondary Nodes": 0,
                 "Connections": len([c for c in connections if node in c]),
-                "Description": data.get("description", "")
+                "Description": data.get("description", ""),
+                "Risk Score": data.get("risk_score", 0),
+                "Compliance": data.get("compliance", "")
             })
         
         for node, data in process_nodes.items():
@@ -546,7 +689,9 @@ def show_detailed_view():
                 "Type": "Process",
                 "Secondary Nodes": 0,
                 "Connections": len([c for c in connections if node in c]),
-                "Description": data.get("description", "")
+                "Description": data.get("description", ""),
+                "Risk Score": data.get("risk_score", 0),
+                "Compliance": data.get("compliance", "")
             })
         
         df = pd.DataFrame(domain_data)
@@ -558,7 +703,9 @@ def show_detailed_view():
                 "Type": st.column_config.TextColumn("Type", width="small"),
                 "Secondary Nodes": st.column_config.NumberColumn("Secondary Nodes", format="%d", width="small"),
                 "Connections": st.column_config.NumberColumn("Connections", format="%d", width="small"),
-                "Description": st.column_config.TextColumn("Description", width="large")
+                "Description": st.column_config.TextColumn("Description", width="large"),
+                "Risk Score": st.column_config.NumberColumn("Risk Score", format="%.2f", width="small"),
+                "Compliance": st.column_config.TextColumn("Compliance", width="medium")
             }
         )
     
@@ -605,22 +752,22 @@ def show_detailed_view():
         1. **Current State Assessment**  
            - Map existing controls to framework nodes  
            - Identify gaps using analytics dashboard  
-           - Benchmark against industry standards
+           - Benchmark against industry standards (ISO 27001, NIST 800-53)
         
         2. **Implementation Prioritization**  
-           - Deploy critical main domains first  
+           - Deploy critical main domains first (based on risk scores)  
            - Focus on high-impact secondary nodes  
-           - Automate process node deployment
+           - Automate process node deployment with CI/CD pipelines
         
         3. **Integration Strategy**  
-           - Establish API-driven integrations  
-           - Define data flows between nodes  
-           - Implement real-time monitoring
+           - Establish API-driven integrations with SIEM/GRC platforms  
+           - Define data flows between nodes with metadata  
+           - Implement real-time monitoring and alerting
         
         4. **Continuous Optimization**  
-           - Conduct quarterly framework reviews  
-           - Update connections based on threats  
-           - Leverage analytics for improvements
+           - Conduct quarterly framework reviews with version control  
+           - Update connections based on threat intelligence  
+           - Leverage AI-driven insights for optimization
         """)
         
         st.subheader("Implementation Checklist")
@@ -650,7 +797,8 @@ def show_detailed_view():
                 "process_nodes": process_nodes,
                 "connections": connections,
                 "generated_date": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                "version": "3.0"
+                "version": "4.0",
+                "user": st.session_state.user["username"]
             }
             
             st.json(framework_export)
@@ -662,6 +810,7 @@ def show_detailed_view():
                 file_name="sabsa_framework.json",
                 mime="application/json"
             )
+            log_action("export_json", "Exported framework as JSON")
         
         if st.button("Export as CSV"):
             export_data = []
@@ -675,7 +824,9 @@ def show_detailed_view():
                     "Color": data["color"],
                     "Parent": "",
                     "Connections": len([c for c in connections if domain in c]),
-                    "Description": data.get("description", "")
+                    "Description": data.get("description", ""),
+                    "Risk Score": data.get("risk_score", 0),
+                    "Compliance": data.get("compliance", "")
                 })
             
             for node, data in secondary_nodes.items():
@@ -687,7 +838,9 @@ def show_detailed_view():
                     "Color": data["color"],
                     "Parent": data["parent"],
                     "Connections": len([c for c in connections if node in c]),
-                    "Description": data.get("description", "")
+                    "Description": data.get("description", ""),
+                    "Risk Score": data.get("risk_score", 0),
+                    "Compliance": data.get("compliance", "")
                 })
             
             for node, data in process_nodes.items():
@@ -699,7 +852,9 @@ def show_detailed_view():
                     "Color": data["color"],
                     "Parent": "",
                     "Connections": len([c for c in connections if node in c]),
-                    "Description": data.get("description", "")
+                    "Description": data.get("description", ""),
+                    "Risk Score": data.get("risk_score", 0),
+                    "Compliance": data.get("compliance", "")
                 })
             
             export_df = pd.DataFrame(export_data)
@@ -711,12 +866,118 @@ def show_detailed_view():
                 file_name="sabsa_framework.csv",
                 mime="text/csv"
             )
+            log_action("export_csv", "Exported framework as CSV")
+        
+        if st.button("Export as XML"):
+            root = ET.Element("SABSAFramework")
+            root.set("version", "4.0")
+            root.set("generated_date", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+            root.set("user", st.session_state.user["username"])
+            
+            main_domains_elem = ET.SubElement(root, "MainDomains")
+            for domain, data in main_domains.items():
+                node = ET.SubElement(main_domains_elem, "Node")
+                node.set("name", domain)
+                node.set("x", str(data["x"]))
+                node.set("y", str(data["y"]))
+                node.set("color", data["color"])
+                node.set("description", data.get("description", ""))
+                node.set("risk_score", str(data.get("risk_score", 0)))
+                node.set("compliance", data.get("compliance", ""))
+            
+            secondary_nodes_elem = ET.SubElement(root, "SecondaryNodes")
+            for node, data in secondary_nodes.items():
+                node_elem = ET.SubElement(secondary_nodes_elem, "Node")
+                node_elem.set("name", node)
+                node_elem.set("x", str(data["x"]))
+                node_elem.set("y", str(data["y"]))
+                node_elem.set("color", data["color"])
+                node_elem.set("parent", data["parent"])
+                node_elem.set("description", data.get("description", ""))
+                node_elem.set("risk_score", str(data.get("risk_score", 0)))
+                node_elem.set("compliance", data.get("compliance", ""))
+            
+            process_nodes_elem = ET.SubElement(root, "ProcessNodes")
+            for node, data in process_nodes.items():
+                node_elem = ET.SubElement(process_nodes_elem, "Node")
+                node_elem.set("name", node)
+                node_elem.set("x", str(data["x"]))
+                node_elem.set("y", str(data["y"]))
+                node_elem.set("color", data["color"])
+                node_elem.set("type", data["type"])
+                node_elem.set("description", data.get("description", ""))
+                node_elem.set("risk_score", str(data.get("risk_score", 0)))
+                node_elem.set("compliance", data.get("compliance", ""))
+            
+            connections_elem = ET.SubElement(root, "Connections")
+            for source, target in connections:
+                conn = ET.SubElement(connections_elem, "Connection")
+                conn.set("source", source)
+                conn.set("target", target)
+            
+            xml_string = ET.tostring(root, encoding='unicode')
+            st.download_button(
+                label="Download XML",
+                data=xml_string,
+                file_name="sabsa_framework.xml",
+                mime="application/xml"
+            )
+            log_action("export_xml", "Exported framework as XML")
+    
+    with tab5:
+        st.subheader("Risk Analytics")
+        
+        st.markdown("### Risk Score Distribution")
+        risk_data = []
+        for domain, data in main_domains.items():
+            risk_data.append({"Node": domain, "Type": "Main Domain", "Risk Score": data.get("risk_score", 0)})
+        for node, data in secondary_nodes.items():
+            risk_data.append({"Node": node, "Type": "Secondary", "Risk Score": data.get("risk_score", 0)})
+        for node, data in process_nodes.items():
+            risk_data.append({"Node": node, "Type": "Process", "Risk Score": data.get("risk_score", 0)})
+        
+        risk_df = pd.DataFrame(risk_data)
+        fig_risk = go.Figure()
+        for node_type in risk_df["Type"].unique():
+            type_df = risk_df[risk_df["Type"] == node_type]
+            fig_risk.add_trace(go.Histogram(
+                x=type_df["Risk Score"],
+                name=node_type,
+                opacity=0.6,
+                nbinsx=20
+            ))
+        
+        fig_risk.update_layout(
+            title="Risk Score Distribution by Node Type",
+            xaxis_title="Risk Score",
+            yaxis_title="Count",
+            barmode='overlay',
+            height=500,
+            font=dict(family="Inter")
+        )
+        
+        st.plotly_chart(fig_risk, use_container_width=True)
+        
+        st.markdown("### AI-Driven Recommendations")
+        high_risk_nodes = risk_df[risk_df["Risk Score"] >= 0.8]
+        if not high_risk_nodes.empty:
+            st.markdown("**High-Risk Nodes Detected:**")
+            for _, row in high_risk_nodes.iterrows():
+                st.markdown(f"- **{row['Node']}** ({row['Type']}): Risk Score {row['Risk Score']:.2f}. Recommended: Conduct immediate risk assessment and mitigation.")
+        else:
+            st.markdown("No high-risk nodes detected. Continue regular monitoring.")
 
 def main():
     st.sidebar.title("SABSA Framework")
+    st.sidebar.markdown(f"**User:** {st.session_state.user['username']} ({st.session_state.user['role']})")
+    
+    # Simulated authentication (replace with enterprise SSO)
+    if st.session_state.user["role"] == "viewer":
+        st.sidebar.markdown('<div class="alert-error">Viewer role: Management features restricted.</div>', unsafe_allow_html=True)
+    
     view_mode = st.sidebar.radio(
         "Select View",
-        ["Interactive Framework", "Detailed Analysis", "About"],
+        ["Interactive Framework", "Detailed Analysis", "Version History", "About"],
         key="main_view_mode"
     )
     
@@ -724,6 +985,46 @@ def main():
         create_interactive_framework()
     elif view_mode == "Detailed Analysis":
         show_detailed_view()
+    elif view_mode == "Version History":
+        st.header("Version History")
+        if st.session_state.user["role"] in ["admin", "architect"]:
+            if st.session_state.version_history:
+                version_data = []
+                for version in st.session_state.version_history:
+                    version_data.append({
+                        "Version ID": version["version_id"],
+                        "Timestamp": version["timestamp"],
+                        "User": version["user"],
+                        "Nodes": len(version["data"]["main_domains"]) + len(version["data"]["secondary_nodes"]) + len(version["data"]["process_nodes"]),
+                        "Connections": len(version["data"]["connections"])
+                    })
+                
+                version_df = pd.DataFrame(version_data)
+                st.dataframe(
+                    version_df,
+                    use_container_width=True,
+                    column_config={
+                        "Version ID": st.column_config.TextColumn("Version ID", width="medium"),
+                        "Timestamp": st.column_config.TextColumn("Timestamp", width="medium"),
+                        "User": st.column_config.TextColumn("User", width="medium"),
+                        "Nodes": st.column_config.NumberColumn("Nodes", format="%d", width="small"),
+                        "Connections": st.column_config.NumberColumn("Connections", format="%d", width="small")
+                    }
+                )
+                
+                selected_version = st.selectbox("Select Version to Restore", 
+                                              [v["version_id"] for v in st.session_state.version_history])
+                if st.button("Restore Version"):
+                    for version in st.session_state.version_history:
+                        if version["version_id"] == selected_version:
+                            st.session_state.framework_data = version["data"].copy()
+                            st.markdown(f'<div class="alert-success">Restored version {selected_version}</div>', unsafe_allow_html=True)
+                            log_action("restore_version", f"Restored version {selected_version}")
+                            break
+            else:
+                st.markdown("No version history available.")
+        else:
+            st.markdown('<div class="alert-error">Access restricted: Version history available to admins and architects only.</div>', unsafe_allow_html=True)
     elif view_mode == "About":
         st.header("About SABSA Framework")
         st.markdown("""
@@ -731,11 +1032,12 @@ def main():
         for developing risk-driven security architectures aligned with business objectives.
         
         ### Enterprise Features:
-        - **Professional Visualization**: Clean, interactive framework view with smooth animations
-        - **Management Mode**: Add, delete, and connect nodes with validation
-        - **Advanced Analytics**: Detailed domain analysis and connection matrix
-        - **Export Capabilities**: Comprehensive JSON and CSV exports
-        - **Modern UI**: Responsive design with enterprise-grade aesthetics
+        - **Secure Access**: Role-based access control with audit logging
+        - **Advanced Visualization**: Interactive framework with risk score overlays
+        - **Management Mode**: Add, move, delete nodes, and manage connections
+        - **Version Control**: Track and restore framework versions
+        - **Integration**: API-ready with JSON, CSV, and XML exports
+        - **Analytics**: Risk score distribution and AI-driven recommendations
         
         ### Framework Structure:
         - **Main Domains**: Core security pillars
@@ -743,7 +1045,8 @@ def main():
         - **Process Nodes**: Operational processes
         - **Connections**: Dynamic relationships
         
-        This enterprise-grade tool provides a robust platform for managing and extending the SABSA framework.
+        This tool is designed for Fortune 100 enterprises, providing a secure, scalable platform for managing 
+        the SABSA framework with compliance and risk management capabilities.
         """)
 
 if __name__ == "__main__":
